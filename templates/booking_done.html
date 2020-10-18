@@ -15,7 +15,7 @@
           <hr />
           <div class="card-body mx-5">
             <p><b>Тема:</b> Пробный урок</p>
-            <p><b>Дата:</b> {{ weekdays[client_data['day']] }}, {{ client_data['time'] }}</p>
+            <p><b>Дата:</b> {{ client_data['day'].view }}, {{ client_data['time'].time }}</p>
             <p><b>Имя:</b> {{ client_data['name'] }}</p>
             <p><b>Телефон:</b> {{ client_data['phone'] }}</p>
           </div>

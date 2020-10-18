@@ -1,161 +1,115 @@
-import json
 import random
 
-from flask import Flask, render_template, abort
-from flask_wtf import FlaskForm
-from wtforms import StringField, HiddenField, RadioField
-from wtforms.validators import InputRequired, Length, DataRequired
+from flask import render_template, request
+from sqlalchemy.sql import text
 
-import database
+import db_set
 
-app = Flask(__name__)
-app.secret_key = "randomstring"
-
-
-class BookingForm(FlaskForm):
-    clientWeekday = HiddenField()
-    clientTime = HiddenField()
-    clientTeacher = HiddenField()
-    clientName = StringField('Вас зовут', [InputRequired(message="Укажите Ваше имя!")],
-                             render_kw={"placeholder": "Иван"})
-    clientPhone = StringField('Ваш телефон', [InputRequired(message="Что то не так с телефоном!"),
-                                              Length(min=6, max=12)], render_kw={"placeholder": "+79812756987"})
-
-
-class RequestForm(FlaskForm):
-    goal = RadioField('Какая цель занятий?', [DataRequired(message="Как без цели?")],
-                      choices=[
-                          ("travel", "Для путешествий"),
-                          ("study", "Для школы"),
-                          ("work", "Для работы"),
-                          ("relocate", "Для переезда")
-                      ]
-                      )
-    time = RadioField('Сколько времени есть?', [DataRequired(message="Укажите время!")],
-                      choices=[
-                          ("1-2 часа в неделю", "1-2 часа в неделю"),
-                          ("3-5 часов в неделю", "3-5 часов в неделю"),
-                          ("5-7 часов в неделю", "5-7 часов в неделю"),
-                          ("7-10 часов в неделю", "7-10 часов в неделю")
-                      ]
-                      )
-    name = StringField('Вас зовут', [InputRequired(message="Укажите Ваше имя!")], render_kw={"placeholder": "Иван"})
-    phone = StringField('Ваш телефон', [InputRequired(message="Что то не так с телефоном!"), Length(min=6, max=12)],
-                        render_kw={"placeholder": "+79812756987"})
+from app_setup import app
+from db_tables import *
+from app_forms import BookingForm, RequestForm
 
 
 @app.route('/')
 def index():
-    teachers = database.get_teachers()
-    random_teachers = list(teachers.values())
 
-    random.seed()
-    random.shuffle(random_teachers)
+    teachers = db.session.query(Teacher).all()
+    random.shuffle(teachers)
 
-    return render_template("index.html", teachers=random_teachers)
+    return render_template("index.html", teachers=teachers)
 
 
 @app.route('/goals/<goal>/')
 def goals(goal):
-    list_goals = database.get_goals()
-    teacher_for_goal = []
 
-    for teacher in database.get_teachers().values():
-        if goal in teacher.goals:
-            teacher_for_goal.append(teacher)
+    t = text("""SELECT * FROM public.teachers
+                    JOIN (
+                        SELECT teacher_id FROM public.goals_relations
+                            JOIN public.goals
+                            ON goal_id = id
+                                WHERE public.goals.goal = :param
+                        ) AS Goal                        
+                    ON id = Goal.teacher_id
+                ORDER BY rating DESC """
+             )
 
-    teacher_for_goal.sort()
+    teachers_for_goal = db.session.execute(t, {"param": goal}).fetchall()
 
-    return render_template("goal.html", teacher_for_goal=teacher_for_goal, goal=list_goals[goal])
+    goal_view = db.session.query(Goal).filter(Goal.goal == goal).first().view
+
+    return render_template("goal.html", teachers_for_goal=teachers_for_goal, goal=goal_view)
 
 
 @app.route('/profiles/<int:teacher_id>/')
 def profiles(teacher_id):
-    teacher = database.get_teacher(teacher_id)
-    weekdays = database.get_weekdays()
-    goals = database.get_goals()
 
-    teacher_goals = [goals[g] for g in teacher.goals]
+    teacher = db.session.query(Teacher).get_or_404(teacher_id)
 
-    if teacher is None:
-        abort(404)
+    teacher_goals = [goal.view for goal in teacher.goals]
 
-    return render_template("profile.html", teacher_id=teacher_id, teacher=teacher,
-                           teacher_goals=teacher_goals, weekdays=weekdays
-                           )
+    return render_template("profile.html", teacher=teacher, teacher_goals=teacher_goals)
 
 
-@app.route('/request/')
-def request():
-    form = RequestForm()
-
-    return render_template("request.html", form=form)
-
-
-@app.route('/request_done/', methods=['POST'])
-def request_done():
-    goals = database.get_goals()
+@app.route('/request/', methods=['GET', 'POST'])
+def render_request():
 
     form = RequestForm()
 
-    request_data = {'goal': form.goal.data,
-                    'time': form.time.data,
-                    'name': form.name.data,
-                    'phone': form.phone.data,
-                    }
+    if request.method == 'GET':
 
-    goal = goals.get(request_data['goal'])
+        return render_template("request.html", form=form)
 
-    try:
-        with open(database.FILE_FOR_REQUEST, "a") as requestJSON:
-            json.dump(request_data, requestJSON)
+    elif request.method == 'POST':
 
-        print(f"Данные успешно записаны в файл {database.FILE_FOR_REQUEST}")
+        if form.validate_on_submit():
 
-    except OSError:
+            goal = db.session.query(Goal).filter(Goal.goal == form.goal.data).first()
 
-        print("Не удалось записать запрос!")
+            request_data = {'goal': goal,
+                            'time': form.time.data,
+                            'name': form.name.data,
+                            'phone': form.phone.data,
+                            }
 
-    return render_template("request_done.html", request_data=request_data, goal=goal)
+            db_set.request_record(db, request_data)
+            db.session.commit()
 
+            return render_template("request_done.html", request_data=request_data)
 
-@app.route('/booking/<int:teacher_id>/<day>/<time>/')
-def booking(teacher_id, day, time):
-    teacher = database.get_teacher(teacher_id)
-    weekdays = database.get_weekdays()
+        else:
 
-    form = BookingForm(clientWeekday=day, clientTime=time, clientTeacher=teacher_id)
-
-    return render_template("booking.html", form=form, teacher_id=teacher_id,
-                           teacher=teacher, day=day, time=time, weekdays=weekdays)
+            return render_template("request.html", form=form)
 
 
-@app.route('/booking_done/', methods=['POST'])
-def booking_done():
-    weekdays = database.get_weekdays()
+@app.route('/booking/<int:teacher_id>/<int:day_id>/<int:time_id>/', methods=['GET', 'POST'])
+def booking(teacher_id, day_id, time_id):
 
-    form = BookingForm()
+    teacher = db.session.query(Teacher).get(teacher_id)
+    day = db.session.query(Day).get(day_id)
+    time = db.session.query(Time).get(time_id)
 
-    client_data = {'day': form.clientWeekday.data,
-                   'time': form.clientTime.data,
-                   'teacher': form.clientTeacher.data,
-                   'name': form.clientName.data,
-                   'phone': form.clientPhone.data,
-                   }
+    form = BookingForm(teacher_id=teacher_id, day_id=day_id, time_id=time_id)
 
-    database.change_teacher_time(int(client_data['teacher']), client_data['day'], client_data['time'])
+    if request.method == 'GET':
 
-    try:
-        with open(database.FILE_FOR_BOOKING, "a") as bookingJSON:
-            json.dump(client_data, bookingJSON)
+        return render_template("booking.html", form=form, teacher=teacher, day=day.view, time=time.time)
 
-        print(f"Данные успешно записаны в файл {database.FILE_FOR_BOOKING}")
+    elif request.method == 'POST':
 
-    except OSError:
+        if form.validate_on_submit():
 
-        print("Не удалось записать данные клиента!")
+            client_data = {'day': day,
+                           'time': time,
+                           'name': form.name.data,
+                           'phone': form.phone.data,
+                           }
 
-    return render_template("booking_done.html", client_data=client_data, weekdays=weekdays)
+            db_set.booking_record(db, teacher, client_data)
+            db.session.commit()
+
+            return render_template("booking_done.html", client_data=client_data)
+
+        return render_template("booking.html", form=form, teacher=teacher, day=day.view, time=time.time)
 
 
 if __name__ == '__main__':

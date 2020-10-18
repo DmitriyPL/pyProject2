@@ -4,7 +4,10 @@
 
   <main class="container mt-5">
     <div class="col-12 col-sm-10 col-lg-6 offset-lg-3 offset-sm-1">
-      <form action="/request_done/" method="POST" class="card mb-5">
+      <form action="{{ url_for('render_request')}}" method="POST" class="card mb-5">
+
+        {{ form.csrf_token }}
+
         <div class="card-body text-center pt-5">
           <h1 class="h3 card-title mt-4 mb-2">Подбор преподавателя</h1>
           <p class="px-5">Напишите, чего вам нужно и мы подберем отличных ребят</p>
@@ -13,6 +16,10 @@
         <div class="card-body mx-3">
           <div class="row">
             <div class="col">
+
+              {% for err in form.goal.errors %}
+                <p>{{ err }} </p>
+              {% endfor %}
 
               {{ form.goal.label }}
 
@@ -25,6 +32,10 @@
             </div>
 
             <div class="col">
+
+              {% for err in form.time.errors %}
+                <p>{{ err }} </p>
+              {% endfor %}
 
               {{ form.time.label }}
 
@@ -43,10 +54,18 @@
           {{ form.name.label(class_="mb-1 mt-2") }}
           {{ form.name(class_="form-control") }}
 
+          {% for err in form.name.errors %}
+            <p>{{ err }} </p>
+          {% endfor %}
+
           {{ form.phone.label(class_="mb-1 mt-2") }}
           {{ form.phone(class_="form-control") }}
 
-          <input type="submit" class="btn btn-primary mt-4 mb-2" value="Найдите мне преподавателя">
+          {% for err in form.phone.errors %}
+            <p>{{ err }} </p>
+          {% endfor %}
+
+          {{ form.submit(class_="btn btn-primary btn-block mt-4 mb-2") }}
 
         </div>
       </form>

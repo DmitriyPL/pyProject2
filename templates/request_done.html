@@ -3,7 +3,6 @@
 {% block container %}
 
   <main class="container mt-3">
-    <!-- HERO -->
     <div class="row mt-5">
       <div class="col-10 col-md-6 offset-1 offset-md-3">
         <div class="card mb-3">
@@ -14,7 +13,7 @@
           </div>
           <hr />
           <div class="card-body mx-5">
-            <p><b>Цель занятий:</b> {{ goal }}</p>
+            <p><b>Цель занятий:</b> {{ request_data['goal'].view }}</p>
             <p><b>Времени есть:</b> {{ request_data['time'] }}</p>
             <p><b>Имя:</b> {{ request_data['name'] }}</p>
             <p><b>Телефон:</b> {{ request_data['phone'] }}</p>

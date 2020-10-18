@@ -21,29 +21,29 @@
 
             <h4 class="mb-4 mt-5">Записаться на пробный урок</h4>
 
-            {% for day, period in teacher.free.items()  %}
+            {% for day in teacher.days  %}
 
-            <h6 class="mt-4">{{ weekdays[day] }}</h6>
+              <h6 class="mt-4">{{ day.view }}</h6>
 
-            {% set  ns = namespace( not_available = {'value': True} ) %}
+              {% set  ns = namespace( not_available = {'value': True} ) %}
 
-            {% for time, available in period.items() %}
+              {% for time in day.times%}
 
-            {% if available %}
+                {% if time.is_free %}
 
-            <a href="/booking/{{ teacher_id }}/{{ day }}/{{ time }}/" class="btn btn-outline-success mr-2 mt-2">{{ time }} свободно</a>
+                  <a href="{{ url_for('booking', teacher_id=teacher.id, day_id=day.id, time_id=time.id) }}" class="btn btn-outline-success  mr-2 mt-2">{{ time.time }} свободно</a>
 
-            {% set ns.not_available = {'value': False} %}
+                  {% set ns.not_available = {'value': False} %}
 
-            {% endif %}
+                {% endif %}
 
-            {% endfor %}
+              {% endfor %}
 
-            {% if ns.not_available['value'] %}
+              {% if ns.not_available['value'] %}
 
-            <p>Нет свободных уроков</p>
+                <p>Нет свободных уроков</p>
 
-            {% endif %}
+              {% endif %}
 
             {% endfor %}
 
